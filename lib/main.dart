@@ -8,6 +8,7 @@ import 'services/storage_service.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
 import 'services/demo_data_service.dart';
+import 'services/firebase_service.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/dashboard_viewmodel.dart';
 import 'views/splash_screen.dart';
@@ -18,7 +19,10 @@ import 'views/main_navigation.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize services
+  // Initialize Firebase first
+  await FirebaseService.instance.init();
+  
+  // Initialize other services
   await StorageService.instance.init();
   await ApiService.instance.init();
   await NotificationService.instance.init();

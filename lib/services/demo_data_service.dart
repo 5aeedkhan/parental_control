@@ -23,7 +23,7 @@ class DemoDataService {
       id: _uuid.v4(),
       name: 'Sarah Johnson',
       email: 'sarah.johnson@example.com',
-      role: 'parent',
+      userType: UserType.parent,
       createdAt: DateTime.now().subtract(const Duration(days: 30)),
       lastLogin: DateTime.now(),
       preferences: {

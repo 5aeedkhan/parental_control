@@ -21,18 +21,22 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       name: fields[1] as String,
       email: fields[2] as String,
       profileImage: fields[3] as String?,
-      role: fields[4] as String,
-      createdAt: fields[5] as DateTime,
-      lastLogin: fields[6] as DateTime?,
-      isActive: fields[7] as bool,
-      preferences: (fields[8] as Map).cast<String, dynamic>(),
+      userType: fields[4] as UserType,
+      parentId: fields[5] as String?,
+      childIds: (fields[6] as List).cast<String>(),
+      createdAt: fields[7] as DateTime,
+      lastLogin: fields[8] as DateTime?,
+      isActive: fields[9] as bool,
+      preferences: (fields[10] as Map).cast<String, dynamic>(),
+      age: fields[11] as int?,
+      deviceId: fields[12] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -42,15 +46,23 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       ..writeByte(3)
       ..write(obj.profileImage)
       ..writeByte(4)
-      ..write(obj.role)
+      ..write(obj.userType)
       ..writeByte(5)
-      ..write(obj.createdAt)
+      ..write(obj.parentId)
       ..writeByte(6)
-      ..write(obj.lastLogin)
+      ..write(obj.childIds)
       ..writeByte(7)
-      ..write(obj.isActive)
+      ..write(obj.createdAt)
       ..writeByte(8)
-      ..write(obj.preferences);
+      ..write(obj.lastLogin)
+      ..writeByte(9)
+      ..write(obj.isActive)
+      ..writeByte(10)
+      ..write(obj.preferences)
+      ..writeByte(11)
+      ..write(obj.age)
+      ..writeByte(12)
+      ..write(obj.deviceId);
   }
 
   @override

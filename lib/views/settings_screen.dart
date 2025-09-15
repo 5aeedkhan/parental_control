@@ -90,25 +90,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const CircleAvatar(
             radius: 40,
-            backgroundColor: AppColors.primary,
+                backgroundColor: AppColors.primary,
             child: Icon(Icons.person, color: Colors.white, size: 40),
-          ),
+              ),
           const SizedBox(height: 16),
           Consumer<AuthViewModel>(
-            builder: (context, authViewModel, child) {
-              return Text(
-                authViewModel.userName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+                builder: (context, authViewModel, child) {
+                  return Text(
+                    authViewModel.userName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
                   fontSize: 20,
                   color: AppColors.textPrimary,
-                ),
-              );
-            },
-          ),
+                    ),
+                  );
+                },
+              ),
           const SizedBox(height: 4),
           Consumer<AuthViewModel>(
-            builder: (context, authViewModel, child) {
+                builder: (context, authViewModel, child) {
               return Text(
                 authViewModel.userEmail,
                 style: const TextStyle(
@@ -288,10 +288,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      child: ListTile(
-        leading: const Icon(Icons.logout, color: AppColors.error),
-        title: const Text(
-          'Logout',
+            child: ListTile(
+              leading: const Icon(Icons.logout, color: AppColors.error),
+              title: const Text(
+                'Logout',
           style: TextStyle(
             color: AppColors.error,
             fontWeight: FontWeight.w600,
@@ -632,12 +632,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
-              await authViewModel.logout();
-              if (context.mounted) {
-                context.go('/auth');
-              }
-            },
+                final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+                await authViewModel.logout();
+                if (context.mounted) {
+                  context.go('/auth');
+                }
+              },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Logout'),
           ),

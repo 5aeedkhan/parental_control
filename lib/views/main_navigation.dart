@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
+import '../viewmodels/auth_viewmodel.dart';
+import '../models/user_model.dart';
 import 'dashboard_screen.dart';
 import 'screen_time_screen.dart';
 import 'app_control_screen.dart';
@@ -12,6 +14,7 @@ import 'settings_screen.dart';
 import 'content_filtering_screen.dart';
 import 'activity_monitoring_screen.dart';
 import 'remote_controls_screen.dart';
+import 'firebase_test_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -82,6 +85,12 @@ class _MainNavigationState extends State<MainNavigation> {
       icon: Icons.settings,
       screen: const SettingsScreen(),
     ),
+    NavigationItem(
+      id: 'firebase_test',
+      label: 'Firebase Test',
+      icon: Icons.bug_report,
+      screen: const FirebaseTestScreen(),
+    ),
   ];
 
   @override
@@ -95,6 +104,21 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    final authViewModel = Provider.of<AuthViewModel>(context);
+    final userType = authViewModel.userType;
+    
+    // Show different interfaces based on user type
+    if (userType == UserType.parent) {
+      return _buildParentInterface();
+    } else if (userType == UserType.child) {
+      return _buildChildInterface();
+    } else {
+      // Fallback to parent interface
+      return _buildParentInterface();
+    }
+  }
+
+  Widget _buildParentInterface() {
     return Scaffold(
       body: Stack(
         children: [
@@ -112,6 +136,13 @@ class _MainNavigationState extends State<MainNavigation> {
         ],
       ),
       bottomNavigationBar: _buildBottomNavigation(),
+    );
+  }
+
+  Widget _buildChildInterface() {
+    return Scaffold(
+      body: _navigationItems[_currentIndex].screen,
+      bottomNavigationBar: _buildChildBottomNavigation(),
     );
   }
 
@@ -331,6 +362,79 @@ class _MainNavigationState extends State<MainNavigation> {
               textAlign: TextAlign.center,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChildBottomNavigation() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              // Limited navigation for children
+              Expanded(
+                child: _buildNavItem(
+                  item: NavigationItem(
+                    id: 'dashboard',
+                    label: 'Home',
+                    icon: Icons.home,
+                    screen: const SizedBox.shrink(),
+                  ),
+                  isActive: _currentIndex == 0,
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = 0;
+                    });
+                  },
+                ),
+              ),
+              Expanded(
+                child: _buildNavItem(
+                  item: NavigationItem(
+                    id: 'screen_time',
+                    label: 'Usage',
+                    icon: Icons.access_time,
+                    screen: const SizedBox.shrink(),
+                  ),
+                  isActive: _currentIndex == 1,
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = 1;
+                    });
+                  },
+                ),
+              ),
+              Expanded(
+                child: _buildNavItem(
+                  item: NavigationItem(
+                    id: 'alerts',
+                    label: 'Alerts',
+                    icon: Icons.notifications,
+                    screen: const SizedBox.shrink(),
+                  ),
+                  isActive: _currentIndex == 4,
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = 4;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

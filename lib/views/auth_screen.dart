@@ -77,14 +77,23 @@ class _AuthScreenState extends State<AuthScreen>
         _passwordController.text,
       );
     } else {
-      success = await authViewModel.register(
+      success = await authViewModel.registerParent(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        role: 'parent',
       );
     }
 
+    if (success && mounted) {
+      context.go('/main');
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    
+    final success = await authViewModel.signInWithGoogle();
+    
     if (success && mounted) {
       context.go('/main');
     }
@@ -295,6 +304,205 @@ class _AuthScreenState extends State<AuthScreen>
                                 );
                               },
                             ),
+                            
+                             const SizedBox(height: 16),
+                             
+                             // Divider
+                             Row(
+                               children: [
+                                 Expanded(
+                                   child: Divider(
+                                     color: Colors.grey.withOpacity(0.3),
+                                     thickness: 1,
+                                   ),
+                                 ),
+                                 Padding(
+                                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                                   child: Text(
+                                     'or',
+                                     style: TextStyle(
+                                       color: Colors.grey.withOpacity(0.7),
+                                       fontSize: 14,
+                                       fontWeight: FontWeight.w500,
+                                     ),
+                                   ),
+                                 ),
+                                 Expanded(
+                                   child: Divider(
+                                     color: Colors.grey.withOpacity(0.3),
+                                     thickness: 1,
+                                   ),
+                                 ),
+                               ],
+                             ),
+                             
+                             // Forgot Password Link (Login only)
+                             if (_isLogin) ...[
+                               const SizedBox(height: 12),
+                               Align(
+                                 alignment: Alignment.centerRight,
+                                 child: TextButton(
+                                   onPressed: () {
+                                     // TODO: Implement forgot password
+                                     ScaffoldMessenger.of(context).showSnackBar(
+                                       const SnackBar(
+                                         content: Text('Forgot password feature coming soon!'),
+                                         duration: Duration(seconds: 2),
+                                       ),
+                                     );
+                                   },
+                                   child: Text(
+                                     'Forgot password?',
+                                     style: TextStyle(
+                                       color: AppColors.primary,
+                                       fontSize: 14,
+                                       fontWeight: FontWeight.w500,
+                                     ),
+                                   ),
+                                 ),
+                               ),
+                             ],
+                             
+                             const SizedBox(height: 16),
+                             
+                             // Google Sign-In Button
+                             Consumer<AuthViewModel>(
+                               builder: (context, authViewModel, child) {
+                                 return Container(
+                                   width: double.infinity,
+                                   height: 56,
+                                   decoration: BoxDecoration(
+                                     color: Colors.white,
+                                     borderRadius: BorderRadius.circular(12),
+                                     border: Border.all(
+                                       color: Colors.grey.withOpacity(0.2),
+                                       width: 1,
+                                     ),
+                                     boxShadow: [
+                                       BoxShadow(
+                                         color: Colors.black.withOpacity(0.05),
+                                         blurRadius: 4,
+                                         offset: const Offset(0, 2),
+                                       ),
+                                     ],
+                                   ),
+                                   child: Material(
+                                     color: Colors.transparent,
+                                     child: InkWell(
+                                       borderRadius: BorderRadius.circular(12),
+                                       onTap: authViewModel.isLoading
+                                           ? null
+                                           : _handleGoogleSignIn,
+                                       child: Padding(
+                                         padding: const EdgeInsets.symmetric(horizontal: 16),
+                                         child: Row(
+                                           mainAxisAlignment: MainAxisAlignment.center,
+                                           children: [
+                                             // Google Logo
+                                             Container(
+                                               width: 20,
+                                               height: 20,
+                                               decoration: const BoxDecoration(
+                                                 image: DecorationImage(
+                                                   image: NetworkImage(
+                                                     'https://developers.google.com/identity/images/g-logo.png',
+                                                   ),
+                                                   fit: BoxFit.contain,
+                                                 ),
+                                               ),
+                                             ),
+                                             const SizedBox(width: 12),
+                                             Text(
+                                               'Continue with Google',
+                                               style: TextStyle(
+                                                 fontSize: 16,
+                                                 fontWeight: FontWeight.w500,
+                                                 color: Colors.grey[800],
+                                               ),
+                                             ),
+                                           ],
+                                         ),
+                                       ),
+                                     ),
+                                   ),
+                                 );
+                               },
+                             ),
+                             
+                             const SizedBox(height: 12),
+                             
+                             // Facebook Sign-In Button
+                             Consumer<AuthViewModel>(
+                               builder: (context, authViewModel, child) {
+                                 return Container(
+                                   width: double.infinity,
+                                   height: 56,
+                                   decoration: BoxDecoration(
+                                     color: Colors.white,
+                                     borderRadius: BorderRadius.circular(12),
+                                     border: Border.all(
+                                       color: Colors.grey.withOpacity(0.2),
+                                       width: 1,
+                                     ),
+                                     boxShadow: [
+                                       BoxShadow(
+                                         color: Colors.black.withOpacity(0.05),
+                                         blurRadius: 4,
+                                         offset: const Offset(0, 2),
+                                       ),
+                                     ],
+                                   ),
+                                   child: Material(
+                                     color: Colors.transparent,
+                                     child: InkWell(
+                                       borderRadius: BorderRadius.circular(12),
+                                       onTap: authViewModel.isLoading
+                                           ? null
+                                           : () {
+                                               // TODO: Implement Facebook Sign-In later
+                                               ScaffoldMessenger.of(context).showSnackBar(
+                                                 const SnackBar(
+                                                   content: Text('Facebook Sign-In coming soon!'),
+                                                   duration: Duration(seconds: 2),
+                                                 ),
+                                               );
+                                             },
+                                       child: Padding(
+                                         padding: const EdgeInsets.symmetric(horizontal: 16),
+                                         child: Row(
+                                           mainAxisAlignment: MainAxisAlignment.center,
+                                           children: [
+                                             // Facebook Logo
+                                             Container(
+                                               width: 20,
+                                               height: 20,
+                                               decoration: const BoxDecoration(
+                                                 color: Color(0xFF1877F2),
+                                                 shape: BoxShape.circle,
+                                               ),
+                                               child: const Icon(
+                                                 Icons.facebook,
+                                                 color: Colors.white,
+                                                 size: 12,
+                                               ),
+                                             ),
+                                             const SizedBox(width: 12),
+                                             Text(
+                                               'Continue with Facebook',
+                                               style: TextStyle(
+                                                 fontSize: 16,
+                                                 fontWeight: FontWeight.w500,
+                                                 color: Colors.grey[800],
+                                               ),
+                                             ),
+                                           ],
+                                         ),
+                                       ),
+                                     ),
+                                   ),
+                                 );
+                               },
+                             ),
                             
                             // Error Message
                             Consumer<AuthViewModel>(

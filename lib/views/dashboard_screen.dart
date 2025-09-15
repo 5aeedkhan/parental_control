@@ -7,6 +7,7 @@ import '../viewmodels/dashboard_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../widgets/custom_card.dart';
 import '../widgets/quick_action_button.dart';
+import 'child_setup_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -77,7 +78,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildHeader() {
     return Consumer2<DashboardViewModel, AuthViewModel>(
       builder: (context, dashboardViewModel, authViewModel, child) {
-        return Row(
+        if (authViewModel.isParent) {
+          return _buildParentHeader(authViewModel);
+        } else {
+          return _buildChildHeader(authViewModel);
+        }
+      },
+    );
+  }
+
+  Widget _buildParentHeader(AuthViewModel authViewModel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
             Expanded(
               child: Column(
@@ -93,7 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Here\'s what\'s happening with your child\'s device',
+                    'Monitor and manage your children\'s devices',
                     style: TextStyle(
                       fontSize: 16,
                       color: AppColors.textSecondary,
@@ -135,8 +149,96 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 16),
+        // Add Child Button
+        if (authViewModel.childIds.isEmpty)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChildSetupScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Child Device'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildChildHeader(AuthViewModel authViewModel) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hello, ${authViewModel.userName}!',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Your device usage and activities',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.primary.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Monitored',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

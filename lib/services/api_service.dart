@@ -66,7 +66,7 @@ class ApiService {
           'id': '1',
           'name': 'Demo Parent',
           'email': email,
-          'role': 'parent',
+          'userType': 'parent',
           'createdAt': DateTime.now().toIso8601String(),
         };
         
@@ -93,11 +93,16 @@ class ApiService {
       
       // Simple validation for demo purposes
       if (userData['email'] != null && userData['password'] != null && userData['name'] != null) {
+        final userType = userData['userType'] ?? 'parent';
         final mockUser = {
           'id': '${DateTime.now().millisecondsSinceEpoch}',
           'name': userData['name'],
           'email': userData['email'],
-          'role': userData['role'] ?? 'parent',
+          'userType': userType,
+          'parentId': userData['parentId'],
+          'childIds': userData['childIds'] ?? [],
+          'age': userData['age'],
+          'deviceId': userData['deviceId'],
           'createdAt': DateTime.now().toIso8601String(),
         };
         
@@ -115,6 +120,38 @@ class ApiService {
     } catch (e) {
       throw Exception('Registration failed: ${e.toString()}');
     }
+  }
+
+  // Register parent account
+  Future<Map<String, dynamic>> registerParent({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    return await register({
+      'name': name,
+      'email': email,
+      'password': password,
+      'userType': 'parent',
+    });
+  }
+
+  // Create child account (called by parent)
+  Future<Map<String, dynamic>> createChildAccount({
+    required String childName,
+    required int age,
+    required String parentId,
+    required String deviceId,
+  }) async {
+    return await register({
+      'name': childName,
+      'email': '${childName.toLowerCase().replaceAll(' ', '')}@child.local',
+      'password': 'child_${DateTime.now().millisecondsSinceEpoch}',
+      'userType': 'child',
+      'parentId': parentId,
+      'age': age,
+      'deviceId': deviceId,
+    });
   }
   
   Future<void> logout() async {
@@ -138,7 +175,7 @@ class ApiService {
         'id': '1',
         'name': 'Demo Parent',
         'email': 'demo@example.com',
-        'role': 'parent',
+        'userType': 'parent',
         'createdAt': DateTime.now().toIso8601String(),
         'isActive': true,
         'preferences': {},
@@ -159,7 +196,7 @@ class ApiService {
         'id': '1',
         'name': userData['name'] ?? 'Demo Parent',
         'email': userData['email'] ?? 'demo@example.com',
-        'role': 'parent',
+        'userType': 'parent',
         'createdAt': DateTime.now().toIso8601String(),
         'isActive': true,
         'preferences': userData['preferences'] ?? {},
