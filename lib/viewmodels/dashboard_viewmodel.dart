@@ -1,27 +1,45 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/device_model.dart';
 import '../models/alert_model.dart';
 import '../models/screen_time_model.dart';
 import '../models/location_model.dart';
+import '../models/user_model.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
+import '../services/firestore_service.dart';
+import '../services/firebase_auth_service.dart';
 
 class DashboardViewModel extends ChangeNotifier {
   final StorageService _storageService = StorageService.instance;
   final ApiService _apiService = ApiService.instance;
+  final FirestoreService _firestoreService = FirestoreService.instance;
+  final FirebaseAuthService _firebaseAuth = FirebaseAuthService.instance;
   
   List<DeviceModel> _devices = [];
   List<AlertModel> _alerts = [];
   List<ScreenTimeModel> _screenTimeData = [];
   LocationModel? _currentLocation;
+  List<UserModel> _children = [];
+  Map<String, dynamic> _realTimeData = {};
   bool _isLoading = false;
   String? _error;
+  
+  // Stream subscriptions for real-time updates
+  StreamSubscription<QuerySnapshot>? _devicesSubscription;
+  StreamSubscription<QuerySnapshot>? _alertsSubscription;
+  StreamSubscription<QuerySnapshot>? _screenTimeSubscription;
+  StreamSubscription<DocumentSnapshot>? _locationSubscription;
+  StreamSubscription<Map<String, dynamic>?>? _realTimeSubscription;
   
   // Getters
   List<DeviceModel> get devices => _devices;
   List<AlertModel> get alerts => _alerts;
   List<ScreenTimeModel> get screenTimeData => _screenTimeData;
   LocationModel? get currentLocation => _currentLocation;
+  List<UserModel> get children => _children;
+  Map<String, dynamic> get realTimeData => _realTimeData;
   bool get isLoading => _isLoading;
   String? get error => _error;
   
@@ -60,18 +78,32 @@ class DashboardViewModel extends ChangeNotifier {
     return Duration(seconds: totalTime.inSeconds ~/ weekData.length);
   }
   
-  // Initialize dashboard data
+  // Initialize dashboard data with real-time Firebase streams
   Future<void> init() async {
     _setLoading(true);
     _clearError();
     
     try {
+      final currentUser = _firebaseAuth.currentUser;
+      if (currentUser == null) {
+        _setError('No authenticated user found');
+        return;
+      }
+      
+      // Load children first
+      await _loadChildren(currentUser.uid);
+      
+      // Set up real-time streams
+      await _setupRealTimeStreams(currentUser.uid);
+      
+      // Load initial data
       await Future.wait([
-        _loadDevices(),
-        _loadAlerts(),
-        _loadScreenTimeData(),
-        _loadCurrentLocation(),
+        _loadDevicesFromFirestore(),
+        _loadAlertsFromFirestore(),
+        _loadScreenTimeDataFromFirestore(),
+        _loadCurrentLocationFromFirestore(),
       ]);
+      
     } catch (e) {
       _setError('Failed to load dashboard data: ${e.toString()}');
     } finally {
@@ -79,77 +111,201 @@ class DashboardViewModel extends ChangeNotifier {
     }
   }
   
-  // Load devices
-  Future<void> _loadDevices() async {
+  // Load children for the current parent
+  Future<void> _loadChildren(String parentId) async {
     try {
-      _devices = _storageService.getAllDevices();
-      if (_devices.isEmpty) {
-        // Try to load from API
-        _devices = await _apiService.getDevices();
-        // Save to local storage
+      _children = await _firestoreService.getChildrenForParent(parentId);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to load children: $e');
+    }
+  }
+  
+  // Set up real-time data streams
+  Future<void> _setupRealTimeStreams(String parentId) async {
+    try {
+      // Cancel existing subscriptions
+      await _cancelSubscriptions();
+      
+      // Set up devices stream
+      _devicesSubscription = FirebaseFirestore.instance
+          .collection('devices')
+          .where('parentId', isEqualTo: parentId)
+          .snapshots()
+          .listen((snapshot) {
+        _devices = snapshot.docs
+            .map((doc) => DeviceModel.fromJson(doc.data()))
+            .toList();
+        notifyListeners();
+      });
+      
+      // Set up alerts stream
+      _alertsSubscription = FirebaseFirestore.instance
+          .collection('alerts')
+          .where('parentId', isEqualTo: parentId)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .listen((snapshot) {
+        _alerts = snapshot.docs
+            .map((doc) => AlertModel.fromJson(doc.data()))
+            .toList();
+        notifyListeners();
+      });
+      
+      // Set up screen time stream for each child
+      for (final child in _children) {
+        _screenTimeSubscription = FirebaseFirestore.instance
+            .collection('screenTime')
+            .where('userId', isEqualTo: child.id)
+            .orderBy('date', descending: true)
+            .limit(7)
+            .snapshots()
+            .listen((snapshot) {
+          final newData = snapshot.docs
+              .map((doc) => ScreenTimeModel.fromJson(doc.data()))
+              .toList();
+          
+          // Merge with existing data
+          _screenTimeData.removeWhere((data) => data.userId == child.id);
+          _screenTimeData.addAll(newData);
+          notifyListeners();
+        });
+      }
+      
+      // Set up real-time monitoring data stream
+      if (_children.isNotEmpty) {
+        final childId = _children.first.id;
+        _realTimeSubscription = _firestoreService
+            .getRealTimeDataStream(childId)
+            .listen((data) {
+          if (data != null) {
+            _realTimeData = data;
+            notifyListeners();
+          }
+        });
+      }
+      
+    } catch (e) {
+      print('Failed to setup real-time streams: $e');
+    }
+  }
+  
+  // Cancel all subscriptions
+  Future<void> _cancelSubscriptions() async {
+    await _devicesSubscription?.cancel();
+    await _alertsSubscription?.cancel();
+    await _screenTimeSubscription?.cancel();
+    await _locationSubscription?.cancel();
+    await _realTimeSubscription?.cancel();
+  }
+  
+  // Load devices from Firestore
+  Future<void> _loadDevicesFromFirestore() async {
+    try {
+      final currentUser = _firebaseAuth.currentUser;
+      if (currentUser == null) return;
+      
+      final snapshot = await FirebaseFirestore.instance
+          .collection('devices')
+          .where('parentId', isEqualTo: currentUser.uid)
+          .get();
+      
+      _devices = snapshot.docs
+          .map((doc) => DeviceModel.fromJson(doc.data()))
+          .toList();
+      
+      // Save to local storage for offline access
         for (final device in _devices) {
           await _storageService.saveDevice(device);
-        }
       }
+      
       notifyListeners();
     } catch (e) {
-      _setError('Failed to load devices: ${e.toString()}');
+      print('Failed to load devices from Firestore: $e');
     }
   }
   
-  // Load alerts
-  Future<void> _loadAlerts() async {
+  // Load alerts from Firestore
+  Future<void> _loadAlertsFromFirestore() async {
     try {
-      _alerts = _storageService.getAllAlerts();
-      if (_alerts.isEmpty) {
-        // Try to load from API
-        _alerts = await _apiService.getAlerts();
-        // Save to local storage
+      final currentUser = _firebaseAuth.currentUser;
+      if (currentUser == null) return;
+      
+      final snapshot = await FirebaseFirestore.instance
+          .collection('alerts')
+          .where('parentId', isEqualTo: currentUser.uid)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .get();
+      
+      _alerts = snapshot.docs
+          .map((doc) => AlertModel.fromJson(doc.data()))
+          .toList();
+      
+      // Save to local storage for offline access
         for (final alert in _alerts) {
           await _storageService.saveAlert(alert);
-        }
       }
+      
       notifyListeners();
     } catch (e) {
-      _setError('Failed to load alerts: ${e.toString()}');
+      print('Failed to load alerts from Firestore: $e');
     }
   }
   
-  // Load screen time data
-  Future<void> _loadScreenTimeData() async {
+  // Load screen time data from Firestore
+  Future<void> _loadScreenTimeDataFromFirestore() async {
     try {
-      if (_devices.isNotEmpty) {
-        final deviceId = _devices.first.id;
+      if (_children.isEmpty) return;
+      
         final now = DateTime.now();
         final weekStart = now.subtract(const Duration(days: 7));
+      
+      for (final child in _children) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('screenTime')
+            .where('userId', isEqualTo: child.id)
+            .where('date', isGreaterThanOrEqualTo: weekStart)
+            .orderBy('date', descending: true)
+            .get();
         
-        _screenTimeData = await _apiService.getScreenTimeData(
-          deviceId,
-          startDate: weekStart,
-          endDate: now,
-        );
+        final childData = snapshot.docs
+            .map((doc) => ScreenTimeModel.fromJson(doc.data()))
+            .toList();
+        
+        _screenTimeData.addAll(childData);
         
         // Save to local storage
-        for (final data in _screenTimeData) {
+        for (final data in childData) {
           await _storageService.saveScreenTime(data);
         }
       }
+      
       notifyListeners();
     } catch (e) {
-      _setError('Failed to load screen time data: ${e.toString()}');
+      print('Failed to load screen time data from Firestore: $e');
     }
   }
   
-  // Load current location
-  Future<void> _loadCurrentLocation() async {
+  // Load current location from Firestore
+  Future<void> _loadCurrentLocationFromFirestore() async {
     try {
-      if (_devices.isNotEmpty) {
-        final deviceId = _devices.first.id;
-        _currentLocation = _storageService.getLatestLocation(deviceId);
+      if (_children.isEmpty) return;
+      
+      final childId = _children.first.id;
+      final snapshot = await FirebaseFirestore.instance
+          .collection('location')
+          .where('userId', isEqualTo: childId)
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get();
+      
+      if (snapshot.docs.isNotEmpty) {
+        _currentLocation = LocationModel.fromJson(snapshot.docs.first.data());
+        notifyListeners();
       }
-      notifyListeners();
     } catch (e) {
-      _setError('Failed to load current location: ${e.toString()}');
+      print('Failed to load current location from Firestore: $e');
     }
   }
   
@@ -333,5 +489,152 @@ class DashboardViewModel extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+  
+  // Dispose method to clean up subscriptions
+  @override
+  void dispose() {
+    _cancelSubscriptions();
+    super.dispose();
+  }
+  
+  // Get real-time device status
+  String getDeviceStatus(String deviceId) {
+    final device = _devices.firstWhere(
+      (d) => d.id == deviceId,
+      orElse: () => DeviceModel(
+        id: '',
+        name: 'Unknown Device',
+        platform: 'unknown',
+        model: 'Unknown',
+        osVersion: 'Unknown',
+        ownerId: null,
+        isOnline: false,
+        lastSeen: null,
+        batteryLevel: 0,
+        isCharging: false,
+        dataUsage: 0.0,
+        settings: {},
+        createdAt: DateTime.now(),
+      ),
+    );
+    
+    if (device.isOnline) {
+      return 'Online';
+    } else {
+      if (device.lastSeen != null) {
+        final timeSinceLastSeen = DateTime.now().difference(device.lastSeen!);
+        if (timeSinceLastSeen.inMinutes < 5) {
+          return 'Online';
+        } else if (timeSinceLastSeen.inHours < 1) {
+          return 'Away';
+        } else {
+          return 'Offline';
+        }
+      } else {
+        return 'Offline';
+      }
+    }
+  }
+  
+  // Get real battery level
+  int getDeviceBatteryLevel(String deviceId) {
+    final device = _devices.firstWhere(
+      (d) => d.id == deviceId,
+      orElse: () => DeviceModel(
+        id: '',
+        name: 'Unknown Device',
+        platform: 'unknown',
+        model: 'Unknown',
+        osVersion: 'Unknown',
+        ownerId: null,
+        isOnline: false,
+        lastSeen: null,
+        batteryLevel: 0,
+        isCharging: false,
+        dataUsage: 0.0,
+        settings: {},
+        createdAt: DateTime.now(),
+      ),
+    );
+    
+    return device.batteryLevel;
+  }
+  
+  // Get real location name
+  String getLocationName() {
+    if (_currentLocation != null) {
+      return _currentLocation!.address ?? 'Unknown Location';
+    }
+    return 'Location not available';
+  }
+  
+  // Get real data usage
+  String getDataUsage() {
+    // This would come from real-time monitoring data
+    if (_realTimeData.containsKey('dataUsage')) {
+      final usage = _realTimeData['dataUsage'] as double;
+      return '${(usage / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
+    }
+    return '0.0 GB';
+  }
+  
+  // Get real app usage breakdown
+  Map<String, double> getAppUsageBreakdown() {
+    final today = DateTime.now();
+    final todayData = _screenTimeData.where((data) => 
+      data.date.year == today.year &&
+      data.date.month == today.month &&
+      data.date.day == today.day
+    ).toList();
+    
+    if (todayData.isEmpty) {
+      return {
+        'Games': 0.0,
+        'Social': 0.0,
+        'Education': 0.0,
+        'Other': 0.0,
+      };
+    }
+    
+    final totalTime = todayData.fold(Duration.zero, (total, data) => total + data.totalTime);
+    if (totalTime.inMinutes == 0) {
+      return {
+        'Games': 0.0,
+        'Social': 0.0,
+        'Education': 0.0,
+        'Other': 0.0,
+      };
+    }
+    
+    final breakdown = <String, double>{};
+    for (final data in todayData) {
+      for (final entry in data.appUsage.entries) {
+        final category = _getAppCategory(entry.key);
+        final percentage = (entry.value.inMinutes / totalTime.inMinutes * 100);
+        breakdown[category] = (breakdown[category] ?? 0.0) + percentage;
+      }
+    }
+    
+    return breakdown;
+  }
+  
+  // Helper method to categorize apps
+  String _getAppCategory(String appName) {
+    final socialApps = ['instagram', 'facebook', 'twitter', 'tiktok', 'snapchat', 'whatsapp'];
+    final gameApps = ['game', 'play', 'fortnite', 'minecraft', 'roblox', 'pubg'];
+    final educationApps = ['school', 'learn', 'education', 'study', 'khan', 'duolingo'];
+    
+    final lowerAppName = appName.toLowerCase();
+    
+    if (socialApps.any((app) => lowerAppName.contains(app))) {
+      return 'Social';
+    } else if (gameApps.any((app) => lowerAppName.contains(app))) {
+      return 'Games';
+    } else if (educationApps.any((app) => lowerAppName.contains(app))) {
+      return 'Education';
+    } else {
+      return 'Other';
+    }
   }
 }
