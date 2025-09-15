@@ -57,20 +57,30 @@ class ApiService {
   // Authentication
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      final response = await _dio.post(
-        '${AppConstants.authEndpoint}/login',
-        data: {
-          'email': email,
-          'password': password,
-        },
-      );
+      // Mock authentication for development
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
       
-      if (response.statusCode == 200) {
-        final data = response.data;
-        _authToken = data['token'];
-        return data;
+      // Simple validation for demo purposes
+      if (email.isNotEmpty && password.isNotEmpty) {
+        final mockUser = {
+          'id': '1',
+          'name': 'Demo Parent',
+          'email': email,
+          'role': 'parent',
+          'createdAt': DateTime.now().toIso8601String(),
+        };
+        
+        final mockToken = 'mock_token_${DateTime.now().millisecondsSinceEpoch}';
+        _authToken = mockToken;
+        
+        return {
+          'user': mockUser,
+          'token': mockToken,
+          'message': 'Login successful',
+        };
+      } else {
+        throw Exception('Email and password are required');
       }
-      throw Exception('Login failed');
     } catch (e) {
       throw Exception('Login failed: ${e.toString()}');
     }
@@ -78,17 +88,30 @@ class ApiService {
   
   Future<Map<String, dynamic>> register(Map<String, dynamic> userData) async {
     try {
-      final response = await _dio.post(
-        '${AppConstants.authEndpoint}/register',
-        data: userData,
-      );
+      // Mock registration for development
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
       
-      if (response.statusCode == 201) {
-        final data = response.data;
-        _authToken = data['token'];
-        return data;
+      // Simple validation for demo purposes
+      if (userData['email'] != null && userData['password'] != null && userData['name'] != null) {
+        final mockUser = {
+          'id': '${DateTime.now().millisecondsSinceEpoch}',
+          'name': userData['name'],
+          'email': userData['email'],
+          'role': userData['role'] ?? 'parent',
+          'createdAt': DateTime.now().toIso8601String(),
+        };
+        
+        final mockToken = 'mock_token_${DateTime.now().millisecondsSinceEpoch}';
+        _authToken = mockToken;
+        
+        return {
+          'user': mockUser,
+          'token': mockToken,
+          'message': 'Registration successful',
+        };
+      } else {
+        throw Exception('Name, email, and password are required');
       }
-      throw Exception('Registration failed');
     } catch (e) {
       throw Exception('Registration failed: ${e.toString()}');
     }
@@ -96,7 +119,8 @@ class ApiService {
   
   Future<void> logout() async {
     try {
-      await _dio.post('${AppConstants.authEndpoint}/logout');
+      // Mock logout for development
+      await Future.delayed(const Duration(milliseconds: 500)); // Simulate network delay
     } catch (e) {
       // Ignore logout errors
     } finally {
@@ -107,8 +131,20 @@ class ApiService {
   // User Management
   Future<UserModel> getCurrentUser() async {
     try {
-      final response = await _dio.get('/user/profile');
-      return UserModel.fromJson(response.data);
+      // Mock user data for development
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final mockUser = {
+        'id': '1',
+        'name': 'Demo Parent',
+        'email': 'demo@example.com',
+        'role': 'parent',
+        'createdAt': DateTime.now().toIso8601String(),
+        'isActive': true,
+        'preferences': {},
+      };
+      
+      return UserModel.fromJson(mockUser);
     } catch (e) {
       throw Exception('Failed to get user profile: ${e.toString()}');
     }
@@ -116,8 +152,20 @@ class ApiService {
   
   Future<UserModel> updateUserProfile(Map<String, dynamic> userData) async {
     try {
-      final response = await _dio.put('/user/profile', data: userData);
-      return UserModel.fromJson(response.data);
+      // Mock user profile update for development
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final mockUser = {
+        'id': '1',
+        'name': userData['name'] ?? 'Demo Parent',
+        'email': userData['email'] ?? 'demo@example.com',
+        'role': 'parent',
+        'createdAt': DateTime.now().toIso8601String(),
+        'isActive': true,
+        'preferences': userData['preferences'] ?? {},
+      };
+      
+      return UserModel.fromJson(mockUser);
     } catch (e) {
       throw Exception('Failed to update user profile: ${e.toString()}');
     }
@@ -126,10 +174,37 @@ class ApiService {
   // Device Management
   Future<List<DeviceModel>> getDevices() async {
     try {
-      final response = await _dio.get(AppConstants.devicesEndpoint);
-      return (response.data as List)
-          .map((json) => DeviceModel.fromJson(json))
-          .toList();
+      // Mock device data for development
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final mockDevices = [
+        {
+          'id': 'device_1',
+          'name': 'Emma\'s iPhone',
+          'type': 'mobile',
+          'platform': 'iOS',
+          'model': 'iPhone 13',
+          'isOnline': true,
+          'lastSeen': DateTime.now().toIso8601String(),
+          'batteryLevel': 78,
+          'isMonitored': true,
+          'userId': '1',
+        },
+        {
+          'id': 'device_2',
+          'name': 'Emma\'s iPad',
+          'type': 'tablet',
+          'platform': 'iOS',
+          'model': 'iPad Air',
+          'isOnline': false,
+          'lastSeen': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+          'batteryLevel': 45,
+          'isMonitored': true,
+          'userId': '1',
+        },
+      ];
+      
+      return mockDevices.map((json) => DeviceModel.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to get devices: ${e.toString()}');
     }
@@ -137,11 +212,16 @@ class ApiService {
   
   Future<DeviceModel> addDevice(DeviceModel device) async {
     try {
-      final response = await _dio.post(
-        AppConstants.devicesEndpoint,
-        data: device.toJson(),
-      );
-      return DeviceModel.fromJson(response.data);
+      // Mock device addition for development
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Return the device with a generated ID
+      final deviceData = device.toJson();
+      deviceData['id'] = 'device_${DateTime.now().millisecondsSinceEpoch}';
+      deviceData['isOnline'] = true;
+      deviceData['lastSeen'] = DateTime.now().toIso8601String();
+      
+      return DeviceModel.fromJson(deviceData);
     } catch (e) {
       throw Exception('Failed to add device: ${e.toString()}');
     }
@@ -149,11 +229,25 @@ class ApiService {
   
   Future<DeviceModel> updateDevice(String deviceId, Map<String, dynamic> updates) async {
     try {
-      final response = await _dio.put(
-        '${AppConstants.devicesEndpoint}/$deviceId',
-        data: updates,
-      );
-      return DeviceModel.fromJson(response.data);
+      // Mock device update for development
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Return a mock updated device
+      final mockDevice = {
+        'id': deviceId,
+        'name': updates['name'] ?? 'Updated Device',
+        'type': 'mobile',
+        'platform': 'iOS',
+        'model': 'iPhone 13',
+        'isOnline': true,
+        'lastSeen': DateTime.now().toIso8601String(),
+        'batteryLevel': 85,
+        'isMonitored': true,
+        'userId': '1',
+        ...updates,
+      };
+      
+      return DeviceModel.fromJson(mockDevice);
     } catch (e) {
       throw Exception('Failed to update device: ${e.toString()}');
     }
@@ -161,7 +255,9 @@ class ApiService {
   
   Future<void> removeDevice(String deviceId) async {
     try {
-      await _dio.delete('${AppConstants.devicesEndpoint}/$deviceId');
+      // Mock device removal for development
+      await Future.delayed(const Duration(milliseconds: 500));
+      print('Device $deviceId removed successfully');
     } catch (e) {
       throw Exception('Failed to remove device: ${e.toString()}');
     }

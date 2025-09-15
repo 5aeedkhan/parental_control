@@ -6,6 +6,7 @@ import '../models/alert_model.dart';
 import '../models/screen_time_model.dart';
 import '../models/app_model.dart';
 import '../models/location_model.dart';
+import '../adapters/duration_adapter.dart';
 
 class StorageService {
   static StorageService? _instance;
@@ -27,6 +28,7 @@ class StorageService {
     await Hive.initFlutter();
     
     // Register adapters
+    Hive.registerAdapter(DurationAdapter());
     Hive.registerAdapter(UserModelAdapter());
     Hive.registerAdapter(DeviceModelAdapter());
     Hive.registerAdapter(AlertModelAdapter());

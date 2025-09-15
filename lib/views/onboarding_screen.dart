@@ -370,7 +370,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
           granted = await _permissionService.requestLocationPermission();
           break;
         case 'notifications':
-          granted = await _permissionService.requestPermission(Permission.notification);
+          granted = await _permissionService.requestNotificationPermission();
           break;
         case 'camera':
           granted = await _permissionService.requestPermission(Permission.camera);
@@ -385,7 +385,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
           granted = await _permissionService.requestPermission(Permission.calendar);
           break;
         case 'storage':
-          granted = await _permissionService.requestPermission(Permission.storage);
+          granted = await _permissionService.requestStoragePermission();
           break;
       }
 
@@ -532,11 +532,13 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         ),
         title: Row(
           children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
             if (isRequired) ...[

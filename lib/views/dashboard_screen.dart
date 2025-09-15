@@ -159,12 +159,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Today\'s Screen Time',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                        Expanded(
+                          child: Text(
+                            'Today\'s Screen Time',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -212,12 +215,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Current Location',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                        Expanded(
+                          child: Text(
+                            'Current Location',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

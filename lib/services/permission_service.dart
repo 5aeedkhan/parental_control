@@ -1,5 +1,4 @@
 import 'package:permission_handler/permission_handler.dart';
-import 'package:geolocator/geolocator.dart';
 import '../constants/app_constants.dart';
 
 class PermissionService {
@@ -20,21 +19,67 @@ class PermissionService {
     return status == PermissionStatus.granted;
   }
   
-  // Check location permission
+  // Check location permission (using permission_handler instead of geolocator)
   Future<bool> isLocationPermissionGranted() async {
-    final status = await Geolocator.checkPermission();
-    return status == LocationPermission.always || status == LocationPermission.whileInUse;
+    final status = await Permission.location.status;
+    return status == PermissionStatus.granted;
   }
   
-  // Request location permission
+  // Request location permission (using permission_handler instead of geolocator)
   Future<bool> requestLocationPermission() async {
-    final status = await Geolocator.requestPermission();
-    return status == LocationPermission.always || status == LocationPermission.whileInUse;
+    final status = await Permission.location.request();
+    return status == PermissionStatus.granted;
   }
   
-  // Check if location services are enabled
+  // Request notification permission with better handling
+  Future<bool> requestNotificationPermission() async {
+    final status = await Permission.notification.request();
+    return status == PermissionStatus.granted;
+  }
+  
+  // Request storage permission with proper handling for different Android versions
+  Future<bool> requestStoragePermission() async {
+    try {
+      // Try MANAGE_EXTERNAL_STORAGE first (Android 11+)
+      final manageStatus = await Permission.manageExternalStorage.request();
+      if (manageStatus == PermissionStatus.granted) {
+        return true;
+      }
+      
+      // Fallback to legacy storage permissions
+      final readStatus = await Permission.storage.request();
+      return readStatus == PermissionStatus.granted;
+    } catch (e) {
+      // If manageExternalStorage is not available, use legacy permissions
+      final readStatus = await Permission.storage.request();
+      return readStatus == PermissionStatus.granted;
+    }
+  }
+  
+  // Check storage permission status
+  Future<bool> isStoragePermissionGranted() async {
+    try {
+      // Check MANAGE_EXTERNAL_STORAGE first
+      final manageStatus = await Permission.manageExternalStorage.status;
+      if (manageStatus == PermissionStatus.granted) {
+        return true;
+      }
+      
+      // Fallback to legacy storage permissions
+      final readStatus = await Permission.storage.status;
+      return readStatus == PermissionStatus.granted;
+    } catch (e) {
+      // If manageExternalStorage is not available, check legacy permissions
+      final readStatus = await Permission.storage.status;
+      return readStatus == PermissionStatus.granted;
+    }
+  }
+  
+  // Check if location services are enabled (simplified version)
   Future<bool> isLocationServiceEnabled() async {
-    return await Geolocator.isLocationServiceEnabled();
+    // Since we don't have geolocator, we'll just check if location permission is granted
+    // In a real implementation, you might want to use platform channels to check this
+    return await isLocationPermissionGranted();
   }
   
   // Request all required permissions
@@ -45,10 +90,10 @@ class PermissionService {
     results['location'] = await requestLocationPermission();
     
     // Notification permission
-    results['notifications'] = await requestPermission(Permission.notification);
+    results['notifications'] = await requestNotificationPermission();
     
     // Storage permission (for Android)
-    results['storage'] = await requestPermission(Permission.storage);
+    results['storage'] = await requestStoragePermission();
     
     // Camera permission
     results['camera'] = await requestPermission(Permission.camera);
@@ -76,7 +121,7 @@ class PermissionService {
     results['notifications'] = await isPermissionGranted(Permission.notification);
     
     // Storage permission
-    results['storage'] = await isPermissionGranted(Permission.storage);
+    results['storage'] = await isStoragePermissionGranted();
     
     // Camera permission
     results['camera'] = await isPermissionGranted(Permission.camera);
@@ -113,7 +158,7 @@ class PermissionService {
   }
   
   // Open app settings
-  Future<void> openAppSettings() async {
+  Future<void> openSettings() async {
     await openAppSettings();
   }
   

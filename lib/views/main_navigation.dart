@@ -9,6 +9,9 @@ import 'app_control_screen.dart';
 import 'location_screen.dart';
 import 'alerts_screen.dart';
 import 'settings_screen.dart';
+import 'content_filtering_screen.dart';
+import 'activity_monitoring_screen.dart';
+import 'remote_controls_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -55,6 +58,24 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   final List<NavigationItem> _moreItems = [
+    NavigationItem(
+      id: 'content_filtering',
+      label: 'Content Filtering',
+      icon: Icons.block,
+      screen: const ContentFilteringScreen(),
+    ),
+    NavigationItem(
+      id: 'activity_monitoring',
+      label: 'Activity Monitoring',
+      icon: Icons.analytics,
+      screen: const ActivityMonitoringScreen(),
+    ),
+    NavigationItem(
+      id: 'remote_controls',
+      label: 'Remote Controls',
+      icon: Icons.control_camera,
+      screen: const RemoteControlsScreen(),
+    ),
     NavigationItem(
       id: 'settings',
       label: 'Settings',
@@ -110,7 +131,6 @@ class _MainNavigationState extends State<MainNavigation> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               // Main Navigation Items
               ..._navigationItems.asMap().entries.map((entry) {
@@ -118,32 +138,36 @@ class _MainNavigationState extends State<MainNavigation> {
                 final item = entry.value;
                 final isActive = _currentIndex == index;
                 
-                return _buildNavItem(
-                  item: item,
-                  isActive: isActive,
-                  onTap: () {
-                    setState(() {
-                      _currentIndex = index;
-                      _showMoreMenu = false;
-                    });
-                  },
+                return Expanded(
+                  child: _buildNavItem(
+                    item: item,
+                    isActive: isActive,
+                    onTap: () {
+                      setState(() {
+                        _currentIndex = index;
+                        _showMoreMenu = false;
+                      });
+                    },
+                  ),
                 );
               }),
               
               // More Button
-              _buildNavItem(
-                item: NavigationItem(
-                  id: 'more',
-                  label: 'More',
-                  icon: Icons.more_horiz,
-                  screen: const SizedBox.shrink(),
+              Expanded(
+                child: _buildNavItem(
+                  item: NavigationItem(
+                    id: 'more',
+                    label: 'More',
+                    icon: Icons.more_horiz,
+                    screen: const SizedBox.shrink(),
+                  ),
+                  isActive: _showMoreMenu,
+                  onTap: () {
+                    setState(() {
+                      _showMoreMenu = !_showMoreMenu;
+                    });
+                  },
                 ),
-                isActive: _showMoreMenu,
-                onTap: () {
-                  setState(() {
-                    _showMoreMenu = !_showMoreMenu;
-                  });
-                },
               ),
             ],
           ),
@@ -160,7 +184,7 @@ class _MainNavigationState extends State<MainNavigation> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: isActive ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -195,10 +219,13 @@ class _MainNavigationState extends State<MainNavigation> {
             Text(
               item.label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                 color: isActive ? Colors.white : AppColors.textSecondary,
               ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
