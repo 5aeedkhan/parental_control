@@ -10,12 +10,14 @@ import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import '../services/firestore_service.dart';
 import '../services/firebase_auth_service.dart';
+import '../services/real_time_data_service.dart';
 
 class DashboardViewModel extends ChangeNotifier {
   final StorageService _storageService = StorageService.instance;
   final ApiService _apiService = ApiService.instance;
   final FirestoreService _firestoreService = FirestoreService.instance;
   final FirebaseAuthService _firebaseAuth = FirebaseAuthService.instance;
+  final RealTimeDataService _realTimeDataService = RealTimeDataService();
   
   List<DeviceModel> _devices = [];
   List<AlertModel> _alerts = [];
@@ -96,6 +98,9 @@ class DashboardViewModel extends ChangeNotifier {
       // Set up real-time streams
       await _setupRealTimeStreams(currentUser.uid);
       
+      // Start real-time data collection for child devices
+      await _startRealTimeDataCollection();
+      
       // Load initial data
       await Future.wait([
         _loadDevicesFromFirestore(),
@@ -121,6 +126,51 @@ class DashboardViewModel extends ChangeNotifier {
     }
   }
   
+  // Start real-time data collection for child devices
+  Future<void> _startRealTimeDataCollection() async {
+    try {
+      // Only start real-time collection if we have children AND devices
+      if (_children.isNotEmpty && _devices.isNotEmpty) {
+        final child = _children.first;
+        final device = _devices.firstWhere(
+          (d) => d.ownerId == child.id,
+          orElse: () => DeviceModel(
+            id: '',
+            name: 'Unknown',
+            platform: 'unknown',
+            model: 'Unknown',
+            osVersion: 'Unknown',
+            ownerId: null,
+            isOnline: false,
+            lastSeen: null,
+            batteryLevel: 0,
+            isCharging: false,
+            dataUsage: 0.0,
+            settings: {},
+            createdAt: DateTime.now(),
+          ),
+        );
+        
+        if (device.id.isNotEmpty && device.isOnline) {
+          await _realTimeDataService.startRealTimeCollection(
+            userId: child.id,
+            deviceId: device.id,
+          );
+          print('Real-time data collection started for child: ${child.name}');
+        } else {
+          print('No online devices found - skipping real-time data collection');
+          await _realTimeDataService.stopRealTimeCollection();
+        }
+      } else {
+        print('No children or devices found - stopping real-time data collection');
+        await _realTimeDataService.stopRealTimeCollection();
+      }
+    } catch (e) {
+      print('Failed to start real-time data collection: $e');
+      await _realTimeDataService.stopRealTimeCollection();
+    }
+  }
+  
   // Set up real-time data streams
   Future<void> _setupRealTimeStreams(String parentId) async {
     try {
@@ -139,28 +189,38 @@ class DashboardViewModel extends ChangeNotifier {
         notifyListeners();
       });
       
-      // Set up alerts stream
+      // Set up alerts stream with error handling
       _alertsSubscription = FirebaseFirestore.instance
           .collection('alerts')
           .where('parentId', isEqualTo: parentId)
-          .orderBy('createdAt', descending: true)
+          .orderBy('timestamp', descending: true)
+          .limit(20) // Reduce limit for better performance
           .snapshots()
-          .listen((snapshot) {
+          .listen(
+        (snapshot) {
         _alerts = snapshot.docs
             .map((doc) => AlertModel.fromJson(doc.data()))
             .toList();
         notifyListeners();
-      });
+        },
+        onError: (error) {
+          print('Alerts stream error: $error');
+          // Try fallback stream without ordering
+          _setupAlertsFallbackStream(parentId);
+        },
+      );
       
-      // Set up screen time stream for each child
-      for (final child in _children) {
+      // Set up screen time stream for the first child only (to avoid multiple streams)
+      if (_children.isNotEmpty) {
+        final child = _children.first;
         _screenTimeSubscription = FirebaseFirestore.instance
             .collection('screenTime')
             .where('userId', isEqualTo: child.id)
             .orderBy('date', descending: true)
             .limit(7)
             .snapshots()
-            .listen((snapshot) {
+            .listen(
+          (snapshot) {
           final newData = snapshot.docs
               .map((doc) => ScreenTimeModel.fromJson(doc.data()))
               .toList();
@@ -169,7 +229,13 @@ class DashboardViewModel extends ChangeNotifier {
           _screenTimeData.removeWhere((data) => data.userId == child.id);
           _screenTimeData.addAll(newData);
           notifyListeners();
-        });
+          },
+          onError: (error) {
+            print('Screen time stream error: $error');
+            // Try fallback stream without ordering
+            _setupScreenTimeFallbackStream(child.id);
+          },
+        );
       }
       
       // Set up real-time monitoring data stream
@@ -188,6 +254,43 @@ class DashboardViewModel extends ChangeNotifier {
     } catch (e) {
       print('Failed to setup real-time streams: $e');
     }
+  }
+  
+  // Fallback alerts stream without ordering
+  void _setupAlertsFallbackStream(String parentId) {
+    _alertsSubscription?.cancel();
+    _alertsSubscription = FirebaseFirestore.instance
+        .collection('alerts')
+        .where('parentId', isEqualTo: parentId)
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      _alerts = snapshot.docs
+          .map((doc) => AlertModel.fromJson(doc.data()))
+          .toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      notifyListeners();
+    });
+  }
+  
+  // Fallback screen time stream without ordering
+  void _setupScreenTimeFallbackStream(String childId) {
+    _screenTimeSubscription?.cancel();
+    _screenTimeSubscription = FirebaseFirestore.instance
+        .collection('screenTime')
+        .where('userId', isEqualTo: childId)
+        .limit(10)
+        .snapshots()
+        .listen((snapshot) {
+      final newData = snapshot.docs
+          .map((doc) => ScreenTimeModel.fromJson(doc.data()))
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      
+      _screenTimeData.removeWhere((data) => data.userId == childId);
+      _screenTimeData.addAll(newData.take(7)); // Take only 7 most recent
+      notifyListeners();
+    });
   }
   
   // Cancel all subscriptions
@@ -231,20 +334,43 @@ class DashboardViewModel extends ChangeNotifier {
       final currentUser = _firebaseAuth.currentUser;
       if (currentUser == null) return;
       
+      try {
+        // Try composite index query first
       final snapshot = await FirebaseFirestore.instance
           .collection('alerts')
           .where('parentId', isEqualTo: currentUser.uid)
-          .orderBy('createdAt', descending: true)
+            .orderBy('timestamp', descending: true)
           .limit(50)
           .get();
       
       _alerts = snapshot.docs
           .map((doc) => AlertModel.fromJson(doc.data()))
           .toList();
+      } catch (e) {
+        print('Composite query failed for alerts, trying fallback: $e');
+        
+        // Fallback: Simple query without ordering if index is not ready
+        try {
+          final fallbackSnapshot = await FirebaseFirestore.instance
+              .collection('alerts')
+              .where('parentId', isEqualTo: currentUser.uid)
+              .limit(50)
+              .get();
+          
+          // Sort in memory
+          _alerts = fallbackSnapshot.docs
+              .map((doc) => AlertModel.fromJson(doc.data()))
+              .toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        } catch (fallbackError) {
+          print('Fallback query also failed for alerts: $fallbackError');
+          _alerts = [];
+        }
+      }
       
-      // Save to local storage for offline access
+      // Save to local storage for offline access (non-blocking)
         for (final alert in _alerts) {
-          await _storageService.saveAlert(alert);
+        _storageService.saveAlert(alert); // Don't await to avoid blocking
       }
       
       notifyListeners();
@@ -261,23 +387,54 @@ class DashboardViewModel extends ChangeNotifier {
         final now = DateTime.now();
         final weekStart = now.subtract(const Duration(days: 7));
       
-      for (final child in _children) {
+      // Load data for all children in parallel
+      final futures = _children.map((child) async {
+        try {
+          // First try with composite index query
         final snapshot = await FirebaseFirestore.instance
             .collection('screenTime')
             .where('userId', isEqualTo: child.id)
             .where('date', isGreaterThanOrEqualTo: weekStart)
             .orderBy('date', descending: true)
+              .limit(7) // Limit results for better performance
             .get();
         
-        final childData = snapshot.docs
+          return snapshot.docs
             .map((doc) => ScreenTimeModel.fromJson(doc.data()))
             .toList();
-        
+        } catch (e) {
+          print('Composite query failed for child ${child.id}, trying fallback: $e');
+          
+          // Fallback: Simple query without date filter if index is not ready
+          try {
+            final fallbackSnapshot = await FirebaseFirestore.instance
+                .collection('screenTime')
+                .where('userId', isEqualTo: child.id)
+                .orderBy('date', descending: true)
+                .limit(7)
+                .get();
+            
+            // Filter in memory
+            return fallbackSnapshot.docs
+                .map((doc) => ScreenTimeModel.fromJson(doc.data()))
+                .where((data) => data.date.isAfter(weekStart))
+                .toList();
+          } catch (fallbackError) {
+            print('Fallback query also failed for child ${child.id}: $fallbackError');
+            return <ScreenTimeModel>[];
+          }
+        }
+      });
+      
+      final results = await Future.wait(futures);
+      
+      // Flatten and add all results
+      for (final childData in results) {
         _screenTimeData.addAll(childData);
         
-        // Save to local storage
+        // Save to local storage in batch
         for (final data in childData) {
-          await _storageService.saveScreenTime(data);
+          _storageService.saveScreenTime(data); // Don't await to avoid blocking
         }
       }
       
@@ -293,6 +450,9 @@ class DashboardViewModel extends ChangeNotifier {
       if (_children.isEmpty) return;
       
       final childId = _children.first.id;
+      
+      try {
+        // Try composite index query first
       final snapshot = await FirebaseFirestore.instance
           .collection('location')
           .where('userId', isEqualTo: childId)
@@ -303,6 +463,33 @@ class DashboardViewModel extends ChangeNotifier {
       if (snapshot.docs.isNotEmpty) {
         _currentLocation = LocationModel.fromJson(snapshot.docs.first.data());
         notifyListeners();
+        }
+      } catch (e) {
+        print('Composite query failed for location, trying fallback: $e');
+        
+        // Fallback: Simple query without ordering if index is not ready
+        try {
+          final fallbackSnapshot = await FirebaseFirestore.instance
+              .collection('location')
+              .where('userId', isEqualTo: childId)
+              .limit(10) // Get more results to sort in memory
+              .get();
+          
+          if (fallbackSnapshot.docs.isNotEmpty) {
+            // Sort by timestamp in memory and take the latest
+            final sortedDocs = fallbackSnapshot.docs.toList()
+              ..sort((a, b) {
+                final timestampA = (a.data()['timestamp'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+                final timestampB = (b.data()['timestamp'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+                return timestampB.compareTo(timestampA);
+              });
+            
+            _currentLocation = LocationModel.fromJson(sortedDocs.first.data());
+            notifyListeners();
+          }
+        } catch (fallbackError) {
+          print('Fallback query also failed for location: $fallbackError');
+        }
       }
     } catch (e) {
       print('Failed to load current location from Firestore: $e');
@@ -495,6 +682,7 @@ class DashboardViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _cancelSubscriptions();
+    _realTimeDataService.dispose();
     super.dispose();
   }
   

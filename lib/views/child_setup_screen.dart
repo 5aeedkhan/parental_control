@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 import '../constants/app_colors.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../services/short_code_service.dart';
 
 class ChildSetupScreen extends StatefulWidget {
   const ChildSetupScreen({super.key});
@@ -57,20 +58,15 @@ class _ChildSetupScreenState extends State<ChildSetupScreen> {
 
     try {
       final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
-      final success = await authViewModel.createChildAccount(
+      final childId = await authViewModel.createChildAccount(
         childName: _nameController.text.trim(),
         age: int.parse(_ageController.text.trim()),
         deviceId: _deviceId!,
       );
 
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Child account created successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.of(context).pop();
+      if (childId != null && mounted) {
+        // Show child credentials dialog with the child ID
+        _showChildCredentialsDialog(childId);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -93,6 +89,116 @@ class _ChildSetupScreenState extends State<ChildSetupScreen> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  void _showChildCredentialsDialog(String childId) async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUser = authViewModel.currentUser;
+    
+    if (currentUser == null) return;
+    
+    try {
+      // Generate and store short code in Firestore
+      final shortCodeService = ShortCodeService();
+      final shortCode = await shortCodeService.generateShortCode(
+        childId: childId, // Use the actual child's ID
+        parentId: currentUser.id, // Use the parent's ID
+        childName: _nameController.text.trim(),
+      );
+      
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Child Account Created!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Share this code with your child:'),
+                const SizedBox(height: 20),
+                
+                // Short Code
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary, width: 2),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Child Login Code',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        shortCode,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info, color: Colors.blue, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Install the app on your child\'s device and enter this code to log in. The code is valid for 24 hours.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Go back to dashboard
+                },
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate login code: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
   }

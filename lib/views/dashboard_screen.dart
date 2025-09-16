@@ -7,8 +7,9 @@ import '../viewmodels/dashboard_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../widgets/custom_card.dart';
 import '../widgets/quick_action_button.dart';
-import '../services/sample_data_service.dart';
 import 'child_setup_screen.dart';
+import 'device_setup_screen.dart';
+import 'child_codes_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -35,7 +36,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onRefresh: () async {
             await Provider.of<DashboardViewModel>(context, listen: false).refresh();
           },
-          child: SingleChildScrollView(
+          child: Consumer<DashboardViewModel>(
+            builder: (context, viewModel, child) {
+              if (viewModel.isLoading) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.primary,
+                  ),
+                );
+              }
+              
+              return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -70,6 +81,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 100), // Bottom padding for navigation
               ],
             ),
+              );
+            },
           ),
         ),
       ),
@@ -178,39 +191,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         
-        // Generate Sample Data Button (for testing)
-        if (authViewModel.childIds.isNotEmpty)
+        // Manage Child Codes Button (when children exist)
+        if (authViewModel.childIds.isNotEmpty) ...[
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () async {
-                try {
-                  await SampleDataService.instance.generateSampleData(
-                    authViewModel.currentUser!.id,
-                    authViewModel.childIds.first,
-                  );
-                  
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sample data generated! Pull to refresh to see real data.'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to generate sample data: $e'),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                  }
-                }
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChildCodesManagementScreen(),
+                  ),
+                );
               },
-              icon: const Icon(Icons.data_usage),
-              label: const Text('Generate Sample Data'),
+              icon: const Icon(Icons.qr_code_2),
+              label: const Text('Manage Child Login Codes'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.white,
@@ -220,6 +216,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
+          ),
+        ],
+        
+        // Add Device Button (when child exists but no devices)
+        if (authViewModel.childIds.isNotEmpty)
+          Consumer<DashboardViewModel>(
+            builder: (context, dashboardViewModel, child) {
+              if (dashboardViewModel.devices.isEmpty) {
+                return Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DeviceSetupScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.phone_android),
+                        label: const Text('Add Monitoring Device'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        
+        // Real-time Data Status
+        if (authViewModel.childIds.isNotEmpty)
+          Consumer<DashboardViewModel>(
+            builder: (context, dashboardViewModel, child) {
+              final hasDevices = dashboardViewModel.devices.isNotEmpty;
+              final isMonitoringActive = hasDevices && dashboardViewModel.devices.any((device) => device.isOnline);
+              
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isMonitoringActive 
+                      ? AppColors.success.withOpacity(0.1)
+                      : AppColors.warning.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isMonitoringActive 
+                        ? AppColors.success.withOpacity(0.3)
+                        : AppColors.warning.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isMonitoringActive ? Icons.sync : Icons.sync_problem,
+                      color: isMonitoringActive ? AppColors.success : AppColors.warning,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isMonitoringActive 
+                                ? 'Real-time Monitoring Active'
+                                : hasDevices 
+                                    ? 'Monitoring Setup Required'
+                                    : 'No Devices Added',
+                            style: TextStyle(
+                              color: isMonitoringActive ? AppColors.success : AppColors.warning,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            isMonitoringActive
+                                ? 'Monitoring ${dashboardViewModel.devices.where((d) => d.isOnline).length} active device${dashboardViewModel.devices.where((d) => d.isOnline).length > 1 ? 's' : ''}'
+                                : hasDevices
+                                    ? 'Add devices to start monitoring'
+                                    : 'Add monitoring devices to track child activity',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      isMonitoringActive ? Icons.check_circle : Icons.warning,
+                      color: isMonitoringActive ? AppColors.success : AppColors.warning,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
       ],
     );
@@ -321,7 +427,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _formatDuration(viewModel.totalScreenTimeToday),
+                      viewModel.totalScreenTimeToday.inMinutes > 0 
+                          ? _formatDuration(viewModel.totalScreenTimeToday)
+                          : '0h 0m',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
@@ -377,7 +485,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      viewModel.getLocationName(),
+                      viewModel.currentLocation != null 
+                          ? viewModel.getLocationName()
+                          : 'No location data',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -482,6 +592,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildWeeklyUsageChart() {
+    return Consumer<DashboardViewModel>(
+      builder: (context, viewModel, child) {
     return CustomCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,6 +609,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 20),
           SizedBox(
             height: 200,
+                child: RepaintBoundary(
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
@@ -559,21 +672,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 borderData: FlBorderData(show: false),
-                barGroups: [
-                  BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 4.2, color: AppColors.primary)]),
-                  BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 3.8, color: AppColors.primary)]),
-                  BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 5.1, color: AppColors.primary)]),
-                  BarChartGroupData(x: 3, barRods: [BarChartRodData(toY: 3.5, color: AppColors.primary)]),
-                  BarChartGroupData(x: 4, barRods: [BarChartRodData(toY: 6.2, color: AppColors.primary)]),
-                  BarChartGroupData(x: 5, barRods: [BarChartRodData(toY: 7.8, color: AppColors.primary)]),
-                  BarChartGroupData(x: 6, barRods: [BarChartRodData(toY: 6.5, color: AppColors.primary)]),
-                ],
+                      barGroups: _buildBarGroups(viewModel),
+                    ),
               ),
             ),
           ),
         ],
       ),
+        );
+      },
     );
+  }
+  
+  List<BarChartGroupData> _buildBarGroups(DashboardViewModel viewModel) {
+    // Use real data if available
+    if (viewModel.devices.isNotEmpty) {
+      final deviceId = viewModel.devices.first.id;
+      final weeklyData = viewModel.getWeeklyScreenTimeData(deviceId);
+      
+      if (weeklyData.isNotEmpty) {
+        return weeklyData.asMap().entries.map((entry) {
+          final index = entry.key;
+          final data = entry.value;
+          return BarChartGroupData(
+            x: index,
+            barRods: [BarChartRodData(
+              toY: data['hours'] as double,
+              color: AppColors.primary,
+            )],
+          );
+        }).toList();
+      }
+    }
+    
+    // Show empty state for real data collection
+    return List.generate(7, (index) {
+      return BarChartGroupData(
+        x: index,
+        barRods: [BarChartRodData(
+          toY: 0.0,
+          color: AppColors.textSecondary.withOpacity(0.3),
+        )],
+      );
+    });
   }
 
   Widget _buildAppUsageBreakdown() {
@@ -611,11 +752,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     SizedBox(
                       width: 120,
                       height: 120,
+                      child: RepaintBoundary(
                       child: PieChart(
                         PieChartData(
                           sectionsSpace: 2,
                           centerSpaceRadius: 30,
                           sections: _buildPieChartSections(breakdown),
+                          ),
                         ),
                       ),
                     ),
@@ -819,7 +962,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${viewModel.devices.isNotEmpty ? viewModel.getDeviceBatteryLevel(viewModel.devices.first.id) : 0}%',
+                          viewModel.devices.isNotEmpty 
+                              ? '${viewModel.getDeviceBatteryLevel(viewModel.devices.first.id)}%'
+                              : '--%',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -842,7 +987,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          viewModel.getDataUsage(),
+                          viewModel.devices.isNotEmpty 
+                              ? viewModel.getDataUsage()
+                              : '-- GB',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

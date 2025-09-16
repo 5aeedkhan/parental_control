@@ -4,6 +4,7 @@ import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/short_code_service.dart';
 
 class AuthViewModel extends ChangeNotifier {
   final StorageService _storageService = StorageService.instance;
@@ -124,14 +125,14 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   // Create child account (called by parent)
-  Future<bool> createChildAccount({
+  Future<String?> createChildAccount({
     required String childName,
     required int age,
     required String deviceId,
   }) async {
     if (_currentUser == null || !_currentUser!.isParent) {
       _setError('Only parents can create child accounts');
-      return false;
+      return null;
     }
     
     _setLoading(true);
@@ -147,6 +148,8 @@ class AuthViewModel extends ChangeNotifier {
       );
       
       if (childUser != null) {
+        print('Child account created successfully: ${childUser.id}, name: ${childUser.name}');
+        
         // Update parent's child list
         final updatedParent = _currentUser!.copyWith(
           childIds: [..._currentUser!.childIds, childUser.id],
@@ -155,14 +158,15 @@ class AuthViewModel extends ChangeNotifier {
         await _storageService.saveUser(updatedParent);
         
         notifyListeners();
-        return true;
+        return childUser.id; // Return the child's ID
       } else {
+        print('Child account creation failed: childUser is null');
         _setError('Child account creation failed: Unable to create account');
-        return false;
+        return null;
       }
     } catch (e) {
       _setError('Child account creation failed: ${e.toString()}');
-      return false;
+      return null;
     } finally {
       _setLoading(false);
     }
@@ -328,4 +332,57 @@ class AuthViewModel extends ChangeNotifier {
   
   // Get user profile image
   String? get userProfileImage => _currentUser?.profileImage;
+  
+  // Login child with short code
+  Future<bool> loginChildWithCode(String code) async {
+    _setLoading(true);
+    _clearError();
+    
+    try {
+      // Import the short code service
+      final shortCodeService = ShortCodeService();
+      final codeData = await shortCodeService.validateShortCode(code);
+      
+      if (codeData != null) {
+        // Code is valid, get the child user data
+        final childId = codeData['childId'] as String;
+        final childName = codeData['childName'] as String;
+        
+        print('Code data: childId=$childId, childName=$childName');
+        
+        final childUser = await _firebaseAuth.getUserById(childId);
+        
+        print('Retrieved child user: ${childUser?.id}, type: ${childUser?.userType}');
+        
+        if (childUser != null && childUser.userType == UserType.child) {
+          _currentUser = childUser;
+          _isLoggedIn = true;
+          
+          // Update last login
+          final updatedUser = childUser.copyWith(
+            lastLogin: DateTime.now(),
+          );
+          _currentUser = updatedUser;
+          
+          // Save to local storage
+          await _storageService.saveUser(updatedUser);
+          
+          notifyListeners();
+          return true;
+        } else {
+          print('Child user not found or wrong type. Found: ${childUser?.id}, Expected: $childId');
+          _setError('Child account not found');
+          return false;
+        }
+      } else {
+        _setError('Invalid or expired code');
+        return false;
+      }
+    } catch (e) {
+      _setError('Login failed: ${e.toString()}');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
 }
