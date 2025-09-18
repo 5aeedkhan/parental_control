@@ -11,6 +11,7 @@ import 'services/demo_data_service.dart';
 import 'services/firebase_service.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/dashboard_viewmodel.dart';
+import 'providers/device_control_provider.dart';
 import 'views/splash_screen.dart';
 import 'views/onboarding_screen.dart';
 import 'views/auth_screen.dart';
@@ -42,6 +43,7 @@ class FamilyGuardApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => DashboardViewModel()),
+        ChangeNotifierProvider(create: (_) => DeviceControlProvider()),
       ],
       child: Consumer<AuthViewModel>(
         builder: (context, authViewModel, _) {

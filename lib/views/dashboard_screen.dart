@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../constants/app_colors.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../providers/device_control_provider.dart';
 import '../widgets/custom_card.dart';
 import '../widgets/quick_action_button.dart';
 import 'child_setup_screen.dart';
@@ -24,6 +25,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<DashboardViewModel>(context, listen: false).init();
+      
+      // Initialize device control provider
+      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+      final deviceControlProvider = Provider.of<DeviceControlProvider>(context, listen: false);
+      if (authViewModel.currentUser != null) {
+        deviceControlProvider.loadDeviceControls(authViewModel.currentUser!.id);
+        deviceControlProvider.startListening(authViewModel.currentUser!.id);
+      }
     });
   }
 
@@ -78,6 +87,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 
                 // Quick Actions
                 _buildQuickActions(),
+                const SizedBox(height: 24),
+                
+                // Device Control Status
+                _buildDeviceControlStatus(),
                 const SizedBox(height: 100), // Bottom padding for navigation
               ],
             ),
@@ -1029,9 +1042,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   icon: Icons.shield,
                   label: 'Lock Device',
                   color: AppColors.error,
-                  onTap: () {
-                    // Implement lock device
-                  },
+                  onTap: () => _handleLockDevice(context),
                 ),
               ),
               const SizedBox(width: 16),
@@ -1040,12 +1051,133 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   icon: Icons.wifi_off,
                   label: 'Pause Internet',
                   color: AppColors.warning,
-                  onTap: () {
-                    // Implement pause internet
-                  },
+                  onTap: () => _handlePauseInternet(context),
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceControlStatus() {
+    return Consumer<DeviceControlProvider>(
+      builder: (context, deviceControlProvider, child) {
+        final dashboardViewModel = Provider.of<DashboardViewModel>(context, listen: false);
+        
+        if (dashboardViewModel.devices.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final deviceId = dashboardViewModel.devices.first.id;
+        final isLocked = deviceControlProvider.isDeviceLocked(deviceId);
+        final isInternetPaused = deviceControlProvider.isInternetPaused(deviceId);
+        final isAppBlockingEnabled = deviceControlProvider.isAppBlockingEnabled(deviceId);
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Device Control Status',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatusIndicator(
+                      'Device Lock',
+                      isLocked,
+                      isLocked ? Icons.lock : Icons.lock_open,
+                      isLocked ? Colors.red : Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildStatusIndicator(
+                      'Internet',
+                      isInternetPaused,
+                      isInternetPaused ? Icons.wifi_off : Icons.wifi,
+                      isInternetPaused ? Colors.orange : Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatusIndicator(
+                      'App Blocking',
+                      isAppBlockingEnabled,
+                      isAppBlockingEnabled ? Icons.block : Icons.apps,
+                      isAppBlockingEnabled ? Colors.purple : Colors.grey,
+                    ),
+                  ),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusIndicator(String label, bool isActive, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: isActive ? color : Colors.grey,
+              shape: BoxShape.circle,
+            ),
           ),
         ],
       ),
@@ -1070,6 +1202,128 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return '${difference.inHours}h ago';
     } else {
       return '${difference.inDays}d ago';
+    }
+  }
+
+  /// Handle device lock action
+  Future<void> _handleLockDevice(BuildContext context) async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final deviceControlProvider = Provider.of<DeviceControlProvider>(context, listen: false);
+    final dashboardViewModel = Provider.of<DashboardViewModel>(context, listen: false);
+
+    // Get the first device ID (you might want to show a device selection dialog)
+    if (dashboardViewModel.devices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No devices available to control'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final deviceId = dashboardViewModel.devices.first.id;
+    final parentId = authViewModel.currentUser?.id ?? '';
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final success = await deviceControlProvider.toggleDeviceLock(deviceId, parentId);
+      
+      Navigator.of(context).pop(); // Close loading dialog
+      
+      if (success) {
+        final isLocked = deviceControlProvider.isDeviceLocked(deviceId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isLocked ? 'Device locked successfully' : 'Device unlocked successfully'),
+            backgroundColor: isLocked ? Colors.red : Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to control device'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.of(context).pop(); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Handle internet pause action
+  Future<void> _handlePauseInternet(BuildContext context) async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final deviceControlProvider = Provider.of<DeviceControlProvider>(context, listen: false);
+    final dashboardViewModel = Provider.of<DashboardViewModel>(context, listen: false);
+
+    // Get the first device ID (you might want to show a device selection dialog)
+    if (dashboardViewModel.devices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No devices available to control'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final deviceId = dashboardViewModel.devices.first.id;
+    final parentId = authViewModel.currentUser?.id ?? '';
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final success = await deviceControlProvider.toggleInternetPause(deviceId, parentId);
+      
+      Navigator.of(context).pop(); // Close loading dialog
+      
+      if (success) {
+        final isPaused = deviceControlProvider.isInternetPaused(deviceId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isPaused ? 'Internet paused successfully' : 'Internet resumed successfully'),
+            backgroundColor: isPaused ? Colors.orange : Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to control internet'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.of(context).pop(); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

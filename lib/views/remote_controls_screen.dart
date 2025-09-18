@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
+import '../providers/device_control_provider.dart';
+import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/dashboard_viewmodel.dart';
 
 class RemoteControlsScreen extends StatefulWidget {
   const RemoteControlsScreen({super.key});
@@ -681,28 +685,104 @@ class _RemoteControlsScreenState extends State<RemoteControlsScreen> {
     );
   }
 
-  void _toggleDeviceLock() {
-    setState(() {
-      _isDeviceLocked = !_isDeviceLocked;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isDeviceLocked ? 'Device locked' : 'Device unlocked'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+  Future<void> _toggleDeviceLock() async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final deviceControlProvider = Provider.of<DeviceControlProvider>(context, listen: false);
+    final dashboardViewModel = Provider.of<DashboardViewModel>(context, listen: false);
+
+    if (dashboardViewModel.devices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No devices available to control'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final deviceId = dashboardViewModel.devices.first.id;
+    final parentId = authViewModel.currentUser?.id ?? '';
+
+    try {
+      final success = await deviceControlProvider.toggleDeviceLock(deviceId, parentId);
+      
+      if (success) {
+        final isLocked = deviceControlProvider.isDeviceLocked(deviceId);
+        setState(() {
+          _isDeviceLocked = isLocked;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isLocked ? 'Device locked' : 'Device unlocked'),
+            backgroundColor: isLocked ? Colors.red : Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to control device'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _toggleInternetPause() {
-    setState(() {
-      _isInternetPaused = !_isInternetPaused;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isInternetPaused ? 'Internet paused' : 'Internet resumed'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+  Future<void> _toggleInternetPause() async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final deviceControlProvider = Provider.of<DeviceControlProvider>(context, listen: false);
+    final dashboardViewModel = Provider.of<DashboardViewModel>(context, listen: false);
+
+    if (dashboardViewModel.devices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No devices available to control'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final deviceId = dashboardViewModel.devices.first.id;
+    final parentId = authViewModel.currentUser?.id ?? '';
+
+    try {
+      final success = await deviceControlProvider.toggleInternetPause(deviceId, parentId);
+      
+      if (success) {
+        final isPaused = deviceControlProvider.isInternetPaused(deviceId);
+        setState(() {
+          _isInternetPaused = isPaused;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isPaused ? 'Internet paused' : 'Internet resumed'),
+            backgroundColor: isPaused ? Colors.orange : Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to control internet'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _toggleAppBlocking() {

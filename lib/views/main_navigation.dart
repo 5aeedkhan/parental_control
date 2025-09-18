@@ -6,8 +6,10 @@ import '../viewmodels/dashboard_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../models/user_model.dart';
 import 'dashboard_screen.dart';
-import 'screen_time_screen.dart';
-import 'app_control_screen.dart';
+import 'screen_time_monitoring_screen.dart';
+import 'apps_control_screen.dart';
+import 'location_monitoring_screen.dart';
+import 'ai_alerts_screen.dart';
 import 'location_screen.dart';
 import 'alerts_screen.dart';
 import 'settings_screen.dart';
@@ -38,25 +40,25 @@ class _MainNavigationState extends State<MainNavigation> {
       id: 'screentime',
       label: 'Screen Time',
       icon: Icons.access_time,
-      screen: const ScreenTimeScreen(),
+      screen: const ScreenTimeMonitoringScreen(),
     ),
     NavigationItem(
       id: 'apps',
       label: 'Apps',
       icon: Icons.apps,
-      screen: const AppControlScreen(),
+      screen: const AppsControlScreen(),
     ),
     NavigationItem(
       id: 'location',
       label: 'Location',
       icon: Icons.location_on,
-      screen: const LocationScreen(),
+      screen: const LocationMonitoringScreen(),
     ),
     NavigationItem(
       id: 'alerts',
       label: 'Alerts',
       icon: Icons.notifications,
-      screen: const AlertsScreen(),
+      screen: const AIAlertsScreen(),
     ),
   ];
 
